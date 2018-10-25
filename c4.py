@@ -9,37 +9,33 @@ class Game:
 
 	def __init__(self, nc=7, nr=6, n=4):
 		self.P = ['.', '🔵', '🔴', '-']
+		self.Pinv = {v: k for k, v in enumerate(self.P)}
+		self.enclosing = '\u20dd'
 		self.nc, self.nr, self.n = nc, nr, n
 		self.clear()
 
 	def clear(self):
 		self.p, self.winner = 1, 0
 		self.cols = [[self.P[0]]*self.nr for _ in range(self.nc)]	# [col][row]
-
-	def topFree(self, col):
-		for r, v in enumerate(col):
-			if v != self.P[0]:
-				return r - 1
-		return len(col) - 1
+		self.topFree = [self.nr - 1] * self.nc
 
 	def canPlay(self, c):
 		'Return whether move would be legal'
-		return not self.over() and 0 <= c < self.nc and self.topFree(self.cols[c]) >= 0
+		# return not self.over() and 0 <= c < self.nc and self.topFree(self.cols[c]) >= 0
+		return not self.over() and 0 <= c < self.nc and self.topFree[c] >= 0
 
 	def play(self, c):
 		'Play move c'
-		r = self.topFree(self.cols[c])
-		assert(r >= 0)
-		self.cols[c][r] = self.P[self.p]
+		self.cols[c][self.topFree[c]] = self.P[self.p]
+		self.topFree[c] -= 1
 		self.winner = self.calcWinner(c)
 		self.p = {1: 2, 2: 1}[self.p]
 
 	def unplay(self, c):
 		'Unplay move c'
-		r = self.topFree(self.cols[c]) + 1
-		assert(r >= 0)
+		self.topFree[c] += 1
+		self.cols[c][self.topFree[c]] = self.P[0]
 		self.winner = 0
-		self.cols[c][r] = self.P[0]
 		self.p = {1: 2, 2: 1}[self.p]
 
 	def over(self):
@@ -50,78 +46,112 @@ class Game:
 		for c in range(self.nc):
 			yield self.cols[c][r]
 
-	def calcWinner(self, c0):
+	def calcWinner(self, c0, *, getWinCoords=False):
 		'''
-		Return who wins given that the current player played at c0 (call AFTER c0 is placed)
+		Return who wins given that the last player played at c0 (call AFTER c0 is placed)
 		0: nobody, 1: player 1, 2: player 2, 3: ends in a draw
+		getWinCoords: if True, return a list of coordinates of winning pieces rather than the winner
 		'''
-		r0 = self.topFree(self.cols[c0]) + 1
+		r0 = self.topFree[c0] + 1
 		me = self.cols[c0][r0]
+		p0 = self.Pinv[me]
+
+		def out(p, coords):
+			if getWinCoords:
+				return coords + [(c0, r0)] if coords else coords
+			else:
+				return p
 
 		n = 1
+		coords = []
 		# Look left
 		for c in reversed(range(c0)):
 			if self.cols[c][r0] != me: break
 			n += 1
+			coords += [(c, r0)]
 		# Look right
 		for c in range(c0+1, self.nc):
 			if self.cols[c][r0] != me: break
 			n += 1
-
-		if n >= self.n: return self.p
+			coords += [(c, r0)]
+		if n >= self.n: return out(p0, coords)
 
 		n = 1
+		coords = []
 		# Look up
 		for r in reversed(range(r0)):
 			if self.cols[c0][r] != me: break
 			n += 1
+			coords += [(c0, r)]
 		# Look down
 		for r in range(r0+1, self.nr):
 			if self.cols[c0][r] != me: break
 			n += 1
-		if n >= self.n: return self.p
+			coords += [(c0, r)]
+		if n >= self.n: return out(p0, coords)
 
 		n = 1
+		coords = []
 		# Look up-left
 		for d in range(1, min(c0, r0) + 1):
 			if self.cols[c0-d][r0-d] != me: break
 			n += 1
+			coords += [(c0-d, r0-d)]
 		# Look down-right
 		for d in range(1, min(self.nc - c0, self.nr - r0)):
 			if self.cols[c0+d][r0+d] != me: break
 			n += 1
-		if n >= self.n: return self.p
+			coords += [(c0+d, r0+d)]
+		if n >= self.n: return out(p0, coords)
 
 		n = 1
+		coords = []
 		# Look up-right
 		for d in range(1, min(self.nc - c0, r0 + 1)):
 			if self.cols[c0+d][r0-d] != me: break
 			n += 1
+			coords += [(c0+d, r0-d)]
 		# Look down-left
 		for d in range(1, min(c0 + 1, self.nr - r0)):
 			if self.cols[c0-d][r0+d] != me: break
 			n += 1
-		if n >= self.n: return self.p
+			coords += [(c0-d, r0+d)]
+		if n >= self.n: return out(p0, coords)
 
 		# Check for draw
 		if r0 == 0 and all(v != self.P[0] for v in self.row(0)):
-			return 3
+			return out(3, [])
 
-		return 0
+		return out(0, [])
 
 	def __repr__(self):
 		ss = [] if self.winner else ['Turn %s' % self.P[self.p]]
-		if self.winner != 0: ss += ['Winner %s' % self.P[self.winner]]
+		if self.winner: ss += ['Winner %s' % self.P[self.winner]]
 		if self.over(): ss += ['Game over']
+
+		# If there is a winner, find out which things won
+		winCoords = []
+		if self.winner:
+			for c, col in enumerate(self.cols):
+				r = self.topFree[c] + 1
+				if r >= self.nr or col[r] != self.P[self.winner]: continue
+				winCoords = self.calcWinner(c, getWinCoords=True)
+				if winCoords: break
+
+		if winCoords:
+			print(winCoords)
 
 		return '\n'.join([
 			'\t'.join(ss),
 			' '.join(map(str, range(self.nc))),
-			'\n'.join(' '.join(col[r] for c, col in enumerate(self.cols)) for r in range(self.nr))
+			'\n'.join(''.join(
+				col[r] + (self.enclosing if (c, r) in winCoords else ' ')
+			for c, col in enumerate(self.cols)) for r in range(self.nr))
 		])
 
 	def copyFrom(self, other):
 		for c in range(self.nc):
+			self.topFree[c] = other.topFree[c]
 			for r in range(self.nr):
 				self.cols[c][r] = other.cols[c][r]
 		self.nc, self.nr, self.n = other.nc, other.nr, other.n
@@ -240,9 +270,9 @@ if len(sys.argv) > 1:
 
 
 if mode == 'play':
-	timeout = 2.0
-	# players = {1: mcs(timeout=timeout), 2: human()}
-	players = {1: mcs(timeout=5.0), 2: mcs(timeout=5.0)}
+	timeout = 5.0
+	players = {1: mcs(timeout=timeout), 2: human()}
+	# players = {1: mcs(timeout=timeout), 2: mcs(timeout=timeout)}
 	# players = {1: smartNoise(), 2: smartNoise()}
 	if len(sys.argv) > 2 and sys.argv[2] == 'human':
 		players = {1: human(), 2: mcs(timeout=timeout)}
@@ -250,7 +280,7 @@ if mode == 'play':
 	while not g.winner:
 		print(g)
 		print()
-		print(g.P[g.p], end=' ')
+		print(g.P[g.p], end='  ')
 		mv = players[g.p](g)
 		if not g.canPlay(mv):
 			continue
