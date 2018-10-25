@@ -9,14 +9,13 @@ class Game:
 
 	def __init__(self, nc=7, nr=6, n=4):
 		self.P = ['.', '🔵', '🔴', '-']
-		self.Pinv = {v: k for k, v in enumerate(self.P)}
 		self.enclosing = '\u20dd'
 		self.nc, self.nr, self.n = nc, nr, n
 		self.clear()
 
 	def clear(self):
 		self.p, self.winner = 1, 0
-		self.cols = [[self.P[0]]*self.nr for _ in range(self.nc)]	# [col][row]
+		self.cols = [[0]*self.nr for _ in range(self.nc)]	# [col][row]
 		self.topFree = [self.nr - 1] * self.nc
 
 	def canPlay(self, c):
@@ -26,7 +25,7 @@ class Game:
 
 	def play(self, c):
 		'Play move c'
-		self.cols[c][self.topFree[c]] = self.P[self.p]
+		self.cols[c][self.topFree[c]] = self.p
 		self.topFree[c] -= 1
 		self.winner = self.calcWinner(c)
 		self.p = {1: 2, 2: 1}[self.p]
@@ -34,7 +33,7 @@ class Game:
 	def unplay(self, c):
 		'Unplay move c'
 		self.topFree[c] += 1
-		self.cols[c][self.topFree[c]] = self.P[0]
+		self.cols[c][self.topFree[c]] = 0
 		self.winner = 0
 		self.p = {1: 2, 2: 1}[self.p]
 
@@ -54,7 +53,6 @@ class Game:
 		'''
 		r0 = self.topFree[c0] + 1
 		me = self.cols[c0][r0]
-		p0 = self.Pinv[me]
 
 		def out(p, coords):
 			if getWinCoords:
@@ -68,13 +66,13 @@ class Game:
 		for c in reversed(range(c0)):
 			if self.cols[c][r0] != me: break
 			n += 1
-			coords += [(c, r0)]
+			if getWinCoords: coords += [(c, r0)]
 		# Look right
 		for c in range(c0+1, self.nc):
 			if self.cols[c][r0] != me: break
 			n += 1
-			coords += [(c, r0)]
-		if n >= self.n: return out(p0, coords)
+			if getWinCoords: coords += [(c, r0)]
+		if n >= self.n: return out(me, coords)
 
 		n = 1
 		coords = []
@@ -82,13 +80,13 @@ class Game:
 		for r in reversed(range(r0)):
 			if self.cols[c0][r] != me: break
 			n += 1
-			coords += [(c0, r)]
+			if getWinCoords: coords += [(c0, r)]
 		# Look down
 		for r in range(r0+1, self.nr):
 			if self.cols[c0][r] != me: break
 			n += 1
-			coords += [(c0, r)]
-		if n >= self.n: return out(p0, coords)
+			if getWinCoords: coords += [(c0, r)]
+		if n >= self.n: return out(me, coords)
 
 		n = 1
 		coords = []
@@ -96,13 +94,13 @@ class Game:
 		for d in range(1, min(c0, r0) + 1):
 			if self.cols[c0-d][r0-d] != me: break
 			n += 1
-			coords += [(c0-d, r0-d)]
+			if getWinCoords: coords += [(c0-d, r0-d)]
 		# Look down-right
 		for d in range(1, min(self.nc - c0, self.nr - r0)):
 			if self.cols[c0+d][r0+d] != me: break
 			n += 1
-			coords += [(c0+d, r0+d)]
-		if n >= self.n: return out(p0, coords)
+			if getWinCoords: coords += [(c0+d, r0+d)]
+		if n >= self.n: return out(me, coords)
 
 		n = 1
 		coords = []
@@ -110,16 +108,16 @@ class Game:
 		for d in range(1, min(self.nc - c0, r0 + 1)):
 			if self.cols[c0+d][r0-d] != me: break
 			n += 1
-			coords += [(c0+d, r0-d)]
+			if getWinCoords: coords += [(c0+d, r0-d)]
 		# Look down-left
 		for d in range(1, min(c0 + 1, self.nr - r0)):
 			if self.cols[c0-d][r0+d] != me: break
 			n += 1
-			coords += [(c0-d, r0+d)]
-		if n >= self.n: return out(p0, coords)
+			if getWinCoords: coords += [(c0-d, r0+d)]
+		if n >= self.n: return out(me, coords)
 
 		# Check for draw
-		if r0 == 0 and all(v != self.P[0] for v in self.row(0)):
+		if r0 == 0 and all(v != 0 for v in self.row(0)):
 			return out(3, [])
 
 		return out(0, [])
@@ -134,7 +132,7 @@ class Game:
 		if self.winner:
 			for c, col in enumerate(self.cols):
 				r = self.topFree[c] + 1
-				if r >= self.nr or col[r] != self.P[self.winner]: continue
+				if r >= self.nr or col[r] != self.winner: continue
 				winCoords = self.calcWinner(c, getWinCoords=True)
 				if winCoords: break
 
@@ -145,7 +143,7 @@ class Game:
 			'\t'.join(ss),
 			' '.join(map(str, range(self.nc))),
 			'\n'.join(''.join(
-				col[r] + (self.enclosing if (c, r) in winCoords else ' ')
+				self.P[col[r]] + (self.enclosing if (c, r) in winCoords else ' ')
 			for c, col in enumerate(self.cols)) for r in range(self.nr))
 		])
 
@@ -158,7 +156,7 @@ class Game:
 		self.p, self.winner = other.p, other.winner
 
 	def actionSpace(self):
-		return list(c for c in range(self.nc) if self.cols[c][0] == self.P[0])
+		return list(c for c in range(self.nc) if self.cols[c][0] == 0)
 
 # List of all valid moves except bad moves (which if played, the opponent has a sure win move afterwards)
 # Except if there is a sure win move for us, in which case return only that (if multiple, return one of them)
