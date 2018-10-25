@@ -17,10 +17,10 @@ class Game:
 		self.cols = [[self.P[0]]*self.nr for _ in range(self.nc)]	# [col][row]
 
 	def topFree(self, col):
-		for r in range(self.nr):
-			if col[r] != self.P[0]:
+		for r, v in enumerate(col):
+			if v != self.P[0]:
 				return r - 1
-		return self.nr - 1
+		return len(col) - 1
 
 	def canPlay(self, c):
 		'Return whether play would be valid'
@@ -41,19 +41,6 @@ class Game:
 	def row(self, r):
 		for c in range(self.nc):
 			yield self.cols[c][r]
-
-	def pdiag(self, d):
-		'Yield elements on the d-th positive diagonal (str)'
-		for c in range(self.nc):
-			if 0 <= d - c < self.nr:
-				yield self.cols[c][d - c]
-
-	def ndiag(self, d):
-		'Yield elements on the d-th negative diagonal (str)'
-		for c in reversed(range(self.nc)):
-			if 0 <= d - c < self.nr:
-				# print('ndiag (d: %d, c: %d)'%(d, c), self.nc - 1 - c, d - c)
-				yield self.cols[self.nc - 1 - c][d - c]
 
 	def calcWinner(self, c0):
 		r0 = self.topFree(self.cols[c0]) + 1
@@ -110,39 +97,6 @@ class Game:
 
 		return 0
 
-	def bruteCalcWinner(self):
-		'Return winner (idx)'
-		P = self.P
-
-		# Check cols
-		s1, s2 = P[1]*self.n, P[2]*self.n
-		for col in self.cols:
-			colStr = ''.join(col)
-			if s1 in colStr: return 1
-			if s2 in colStr: return 2
-
-		# Check rows
-		for r in range(self.nr):
-			rowStr = ''.join(self.row(r))
-			if s1 in rowStr: return 1
-			if s2 in rowStr: return 2
-
-		# Check diagonals
-		D = min(self.nc, self.nr)
-		for d in range(self.n - 1, self.nc + self.nr - self.n):
-			pdiagStr = ''.join(e for e in self.pdiag(d))
-			if s1 in pdiagStr: return 1
-			if s2 in pdiagStr: return 2
-			ndiagStr = ''.join(e for e in self.ndiag(d))
-			if s1 in ndiagStr: return 1
-			if s2 in ndiagStr: return 2
-
-		# Check full
-		if all(c != self.P[0] for c in self.row(0)):
-			return 3
-
-		return 0
-
 	def __repr__(self):
 		s = ' '.join(map(str, range(self.nc))) + '\n'
 		s += '\n'.join(' '.join(col[r] for col in self.cols) for r in range(self.nr))
@@ -152,7 +106,7 @@ class Game:
 		if self.over(): ss += ['Game over']
 
 		s += '\n' + '\t'.join(ss)
-		return s
+		return s + '\n'
 
 	def copyFrom(self, other):
 		for c in range(self.nc):
@@ -272,17 +226,26 @@ def mcs(*, name='MCS', timeout=5.0, verbose=True):
 g = Game()
 
 mode = 'play'
-players = {1: mcs(timeout=5.0), 2: human()}
 
 if len(sys.argv) > 1:
-	if sys.argv[1] == 'human':
-		players = {1: human(), 2: mcs(timeout=5.0)}
-	elif sys.argv[1] == 'stats':
-		mode = 'stats'
-		timeout = 10.0
-		players = {1: mcs(timeout=timeout, verbose=False), 2: mcs(timeout=timeout, verbose=False)}
+	mode = sys.argv[1]
+	if mode == 'play':
+		if len(sys.argv) > 2 and sys.argv[2] == 'human':
+			players = {1: human(), 2: mcs(timeout=5.0)}
+	elif mode == 'stats':
+		wins = {1: 0, 2: 0, 3: 0}
+
+		if len(sys.argv) > 2:
+			wins[1] = int(sys.argv[2])
+		if len(sys.argv) > 3:
+			wins[2] = int(sys.argv[3])
+		if len(sys.argv) > 4:
+			wins[3] = int(sys.argv[4])
+	elif mode == 'replay':
+		moves = list(map(int, sys.argv[2]))
 
 if mode == 'play':
+	players = {1: mcs(timeout=5.0), 2: human()}
 	print(g)
 	while not g.winner:
 		print(g.P[g.p], end=' ')
@@ -291,17 +254,10 @@ if mode == 'play':
 			continue
 		g.play(mv)
 		print(g)
-		print()
 
 elif mode == 'stats':
-	wins = {1: 0, 2: 0, 3: 0}
-
-	if len(sys.argv) > 2:
-		wins[1] = int(sys.argv[2])
-	if len(sys.argv) > 3:
-		wins[2] = int(sys.argv[3])
-	if len(sys.argv) > 4:
-		wins[3] = int(sys.argv[4])
+	timeout = 10.0
+	players = {1: mcs(timeout=timeout, verbose=False), 2: mcs(timeout=timeout, verbose=False)}
 
 	t = sum(wins.values())
 	while True:
@@ -318,3 +274,11 @@ elif mode == 'stats':
 		wins[g.winner] += 1
 		t += 1
 		print('%d\t[%.3fs]\t%d wins (1: %d (%.1f%%), 2: %d (%.1f%%), draw: %d (%.1f%%))\t%s' % (t, end - start, g.winner, wins[1], wins[1]/t*100, wins[2], wins[2]/t*100, wins[3], wins[3]/t*100, ''.join(map(str, seq))))
+
+elif mode == 'replay':
+	print('Replaying with %s' % moves)
+	print(g)
+
+	for mv in moves:
+		g.play(mv)
+		print(g)
